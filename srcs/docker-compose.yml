@@ -1,0 +1,85 @@
+networks:
+  inception:
+    driver: bridge
+
+services:
+  nginx:
+    container_name: nginx
+    build: ./requirements/nginx/.
+    env_file: .env
+    ports: 
+      - "443:443"
+    restart: on-failure
+    depends_on:
+      - wordpress
+    volumes:
+      - wordpress:/var/www/wordpress
+    networks: 
+      - inception
+
+  mariadb:
+    container_name: mariadb
+    build: ./requirements/mariadb/.
+    env_file: .env
+    restart: on-failure
+    volumes: 
+      - mariadb:/var/lib/mysql
+    networks: 
+      - inception
+    expose:
+      - "3306"
+    secrets:
+      - mariadb_pw
+      - mariadb_root_pw
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-u", "root", "-p$(cat /run/secrets/mariadb_root_pw)"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+
+  wordpress:
+    container_name: wordpress
+    build: ./requirements/wordpress/.
+    env_file: .env
+    restart: on-failure
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    volumes: 
+      - wordpress:/var/www/wordpress
+    networks: 
+      - inception
+    expose:
+      - "9000"
+    secrets:
+      - wp_admin_pw
+      - wp_user_pw
+      - mariadb_pw
+
+volumes:
+  wordpress:
+    name: wordpress
+    driver: local
+    driver_opts:
+      device: /home/sfraslin/data/wordpress
+      type: none
+      o: bind
+  
+  mariadb:
+    name: mariadb
+    driver: local
+    driver_opts:
+      device: /home/sfraslin/data/mariadb
+      type: none
+      o: bind
+
+secrets:
+  wp_admin_pw: 
+    file: ../secrets/wp_admin_pw.txt
+  wp_user_pw:
+    file: ../secrets/wp_user_pw.txt
+  mariadb_pw:
+    file: ../secrets/mariadb_pw.txt
+  mariadb_root_pw:
+    file: ../secrets/mariadb_root_pw.txt
